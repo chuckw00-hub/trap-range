@@ -1,0 +1,11 @@
+# Local tooling and editor config
+.claude/
+
+# Internal handoff materials — not for the public repo
+trap_range_handoff.docx
+skeet.html
+
+# Build/share artifacts
+TrapRange.zip
+TrapRange-web.zip
+Trap Range - Share/
