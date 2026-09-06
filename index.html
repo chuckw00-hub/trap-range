@@ -192,7 +192,12 @@ import * as THREE from 'three';
    Northeast US field setting · pointer-lock free aim
    Three shells · doubles · occasional bonus birds
    ========================================================= */
+/* ---- RULES (one place to flip) ----
+   GPT-6 pass: 3 shells, two clays on every pull.
+   Locked v1:  2 shells, single clays with a 30% surprise double from pull 2 on. */
 const TOTAL_PULLS = 10, SHELLS_PER_PULL = 3;
+const ALWAYS_DOUBLES = true, DOUBLES_CHANCE = 0.3; // DOUBLES_CHANCE only applies when ALWAYS_DOUBLES is false
+const MIN_CLAYS = TOTAL_PULLS * (ALWAYS_DOUBLES ? 2 : 1); // score denominator floor
 
 /* ================= SEASON ================= */
 const SEASONS = {
@@ -584,9 +589,9 @@ function updateBird(dt,T){
   if(hawkState==='swoop'){
     swoopT+=dt;
     const u=Math.min(1,swoopT/swoopDur);
-    // Farther pass: roughly 43–56 metres from the firing line.
-    hawk.position.set(birdSide*birdPassWidth*(1-2*u),10.5-2*Math.sin(Math.PI*u),-38+10*Math.sin(Math.PI*u));
-    const tangent=new THREE.Vector3(-2*birdPassWidth*birdSide,-2*Math.PI*Math.cos(Math.PI*u),10*Math.PI*Math.cos(Math.PI*u)).normalize();
+    // Close pass: roughly 28–40 metres from the shooter (camera is at z=+14), so it reads as a real bird, not a speck.
+    hawk.position.set(birdSide*birdPassWidth*(1-2*u),10.5-2*Math.sin(Math.PI*u),-22+8*Math.sin(Math.PI*u));
+    const tangent=new THREE.Vector3(-2*birdPassWidth*birdSide,-2*Math.PI*Math.cos(Math.PI*u),8*Math.PI*Math.cos(Math.PI*u)).normalize();
     hawk.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),tangent);
     hawk.rotateZ(Math.sin(u*Math.PI*2)*.16);
     if(u>=1){hawkState='gone';hawk.visible=false;}
@@ -1281,7 +1286,7 @@ let birdPulls = new Set();
 let pendingDouble = false, claysThisPull = 0, hitsThisPull = 0, bonus = 0, birdHitThisPull = false;
 
 function setScore(){
-  $('score').textContent = hits + '/' + Math.max(thrown, TOTAL_PULLS) + (bonus ? ' +' + bonus : '');
+  $('score').textContent = hits + '/' + Math.max(thrown, MIN_CLAYS) + (bonus ? ' +' + bonus : '');
 }
 function setShells(){
   const el=$('shells');el.innerHTML='<span class="ammo-label">SHOTS</span>';
@@ -1309,7 +1314,7 @@ function nextPull(){
   state = 'idle';
   pullToken++;pendingLaunches=0;birdHitThisPull=false;
   shells = SHELLS_PER_PULL; setShells();
-  pendingDouble = true; // Two clays on every pull, including the first.
+  pendingDouble = ALWAYS_DOUBLES || (pullNum > 1 && Math.random() < DOUBLES_CHANCE);
   $('stationLabel').textContent = 'PULL ' + pullNum + ' / ' + TOTAL_PULLS;
   if(isTouchDevice) $('pullBtn').classList.remove('hidden');
   $('doublesTag').classList.remove('show');
@@ -1471,7 +1476,7 @@ function fire(){
     const toHawk = hawk.position.clone().sub(camera.position);
     const dist = toHawk.length();
     const ang = fwd.angleTo(toHawk.normalize());
-    if(ang < 0.009 + 0.35/dist){
+    if(ang < 0.05 + 0.9/dist){ // same pattern spread as a clay (v1 parity); the old 0.009+0.35/d cone was ~0.9° at 50 m
       bonus += 5; birdHitThisPull=true;setScore();
       featherBurst(hawk.position);
       playSquawk();
