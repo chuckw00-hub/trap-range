@@ -107,6 +107,34 @@
   }
   .season-btn:hover{background:#1d3550;}
   .esc-note{margin-top:14px;font-size:12px;color:#7e9ab2;}
+
+  /* Range instruments: readable against both sky and foliage. */
+  .hud .station,.hud .score,.hud .shells{background:rgba(13,29,34,.78);border:1px solid #ffffff26;box-shadow:0 6px 24px #07171930;backdrop-filter:blur(12px);border-radius:12px;padding:12px 16px;top:20px;}
+  .hud .score{font-size:clamp(22px,3vw,32px);letter-spacing:1px;}
+  .hud .station{line-height:30px;}
+  .hud .shells{gap:9px;height:62px;}
+  .shell-icon{width:14px;height:32px;border-radius:5px 5px 2px 2px;background:linear-gradient(90deg,#822b18,#f18448 45%,#9c3b20);border-bottom:8px solid #d8b665;box-shadow:inset 1px 0 2px #ffffff80,0 2px 5px #0008;transition:opacity .15s,transform .15s;}
+  .shell-icon.spent{opacity:.2;transform:translateY(4px);}
+  .ammo-label{font-size:12px;letter-spacing:1px;margin-right:4px;color:#d0d9d0;}
+  .bird-status{position:absolute;top:97px;left:50%;transform:translateX(-50%);padding:8px 14px;border:1px solid #ffe0a466;border-radius:30px;color:#ffe4a9;background:#182d30d9;font-size:13px;font-weight:700;letter-spacing:1px;opacity:0;transition:opacity .2s;white-space:nowrap;}
+  .bird-status.show{opacity:1;}
+  .hud .doubles-tag{top:141px;font-size:15px;}
+  .overlay{background:linear-gradient(110deg,#0b1c24e8,#152d359c 60%,#142f3933);}
+  .overlay h1{font-weight:900;letter-spacing:5px;text-shadow:0 4px 30px #0004;}
+  .overlay .sub{max-width:520px;color:#e1e6d9;}
+  .howto div{border:1px solid #f4e5c125;background:#10262bd4;line-height:1.6;}
+  .crosshair{filter:drop-shadow(0 1px 2px #0009);}
+  .msg{font-size:clamp(28px,6vw,52px);letter-spacing:2px;}
+  @media(max-width:600px){
+    .hud .station{left:10px;font-size:11px;letter-spacing:.5px;padding:8px;line-height:24px;}
+    .hud .score{padding:9px 10px;font-size:21px;}
+    .hud .shells{right:10px;padding:9px;height:44px;gap:5px;}
+    .shell-icon{width:10px;height:25px;border-bottom-width:6px;}
+    .ammo-label{display:none;}.bird-status{top:78px;font-size:11px;}.hud .doubles-tag{top:119px;}
+    .howto{gap:8px;margin-bottom:18px;}.howto div{min-width:90px;flex:1;padding:10px;font-size:12px;}.howto b{font-size:12px;}
+    .overlay h1{font-size:34px;}.esc-note{max-width:280px;line-height:1.5;}
+  }
+  @media(max-height:500px){.overlay{padding:12px;}.overlay h1{font-size:30px;}.overlay .sub{margin-bottom:12px;}.howto{margin-bottom:12px;}.howto div{padding:8px 14px;}.season-btn{margin-top:10px;}.esc-note{margin-top:8px;}}
 </style>
 </head>
 <body>
@@ -117,6 +145,7 @@
   <div class="station" id="stationLabel">CLAY 1 / 10</div>
   <div class="score" id="score">0/10</div>
   <div class="shells" id="shells"></div>
+  <div class="bird-status" id="birdStatus" role="status"></div>
   <div class="doubles-tag" id="doublesTag">DOUBLES!</div>
   <div class="lockhint" id="lockHint">CLICK TO TAKE AIM</div>
   <svg class="crosshair" id="crosshair" viewBox="0 0 46 46">
@@ -134,11 +163,11 @@
 
 <div class="overlay" id="startOverlay">
   <h1>TRAP<span class="clay-dot"> &bull; </span>RANGE</h1>
-  <div class="sub">10 pulls. 2 shells each. Watch for surprise doubles.</div>
+  <div class="sub">10 pulls. Two clays, three shots. Occasional bonus birds.</div>
   <div class="howto">
     <div><b>AIM</b>Mouse or trackpad always moves your sight &mdash; no clicking needed</div>
     <div><b>PRESS &amp; HOLD</b>Launches the clay (spacebar works too)</div>
-    <div><b>RELEASE</b>Fires the shot &mdash; lead your target</div>
+    <div><b>RELEASE</b>Fires a shot. Press and release again for shots 2 and 3.</div>
   </div>
   <button class="primary" id="startBtn">START ROUND</button>
   <button class="season-btn" id="seasonBtn"></button>
@@ -159,17 +188,17 @@
 import * as THREE from 'three';
 
 /* =========================================================
-   TRAP RANGE — production build v1
+   TRAP RANGE — graphics & close-bird edition v2
    Northeast US field setting · pointer-lock free aim
-   Locked mechanics ported verbatim from prototype skeet.html
+   Three shells · doubles · occasional bonus birds
    ========================================================= */
-const TOTAL_PULLS = 10, SHELLS_PER_PULL = 2, DOUBLES_CHANCE = 0.3;
+const TOTAL_PULLS = 10, SHELLS_PER_PULL = 3;
 
 /* ================= SEASON ================= */
 const SEASONS = {
   autumn: {
     label: 'SEASON: OCTOBER FOLIAGE',
-    skyTop:'#1f5fae', skyMid:'#6ea7d9', skyHorizon:'#e9e2cf',
+    skyTop:'#356a99', skyMid:'#8ab2ca', skyHorizon:'#e9e2cf',
     sunColor:0xffd29a, sunIntensity:3.4, hemiSky:0xd8e6f5, hemiGround:0x6b5a38, hemiIntensity:2.0,
     fog:0xe2ded0, fogNear:150, fogFar:720,
     fieldBase:'#8a8a4d', fieldAlt:'#a08c50', fieldDark:'#6e7340',
@@ -389,7 +418,7 @@ function canvasTex(size, draw, repeat){
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   if(repeat){ t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat,repeat); }
-  t.anisotropy = 4;
+  t.anisotropy = 8;
   return t;
 }
 const rand = (a,b)=>a+Math.random()*(b-a);
@@ -401,7 +430,7 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(PAL.fog, PAL.fogNear, PAL.fogFar);
 const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 1600);
 camera.position.set(0, 1.7, 14);
-let yaw = 0, pitch = 0.10;
+let yaw = 0, pitch = 0.10, viewYaw = 0, viewPitch = 0.10;
 
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -410,8 +439,16 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 0.94;
 document.getElementById('game').appendChild(renderer.domElement);
+
+const reflectionTex=canvasTex([256,128],(g,w,h)=>{
+  const gradient=g.createLinearGradient(0,0,0,h);
+  gradient.addColorStop(0,'#b7d4ee');gradient.addColorStop(.48,'#edf2e8');gradient.addColorStop(.52,'#787e60');gradient.addColorStop(1,'#34382c');
+  g.fillStyle=gradient;g.fillRect(0,0,w,h);
+});
+reflectionTex.mapping=THREE.EquirectangularReflectionMapping;
+scene.environment=reflectionTex;
 
 /* shared wind clock uniform for vegetation shaders */
 const uTime = { value: 0 };
@@ -507,22 +544,58 @@ const cloudGroups = [];
     cloudGroups.push(sp); scene.add(sp);
   }
 })();
-/* circling hawk */
-const hawk = (function(){
-  const c = document.createElement('canvas'); c.width=64; c.height=32;
-  const g = c.getContext('2d');
-  g.strokeStyle = 'rgba(30,25,22,.9)'; g.lineWidth = 3; g.lineCap='round';
-  g.beginPath(); g.moveTo(6,20); g.quadraticCurveTo(20,8,32,16); g.quadraticCurveTo(44,8,58,20); g.stroke();
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:t, transparent:true, fog:false, depthWrite:false}));
-  sp.scale.set(3.2,1.6,1);
-  scene.add(sp);
-  return sp;
+/* Sculpted bird with independently animated, layered flight feathers. */
+const hawk = new THREE.Group();
+const hawkWings = [];
+(function(){
+  const brown = new THREE.MeshStandardMaterial({color:0x70503a,roughness:.88});
+  const cream = new THREE.MeshStandardMaterial({color:0xe3c79c,roughness:.9});
+  const dark = new THREE.MeshStandardMaterial({color:0x302923,roughness:.85});
+  const rust = new THREE.MeshStandardMaterial({color:0xa35b35,roughness:.85});
+  const shape = new THREE.SphereGeometry(1,16,10);
+  function part(parent,mat,x,y,z,sx,sy,sz){
+    const m=new THREE.Mesh(shape,mat);m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.castShadow=true;parent.add(m);return m;
+  }
+  part(hawk,brown,0,0,0,.29,.23,.64);
+  part(hawk,cream,0,-.12,-.1,.25,.13,.48);
+  part(hawk,brown,0,.08,-.63,.21,.2,.25);
+  part(hawk,dark,0,.03,-.88,.09,.075,.15);
+  for(const side of [-1,1]){
+    part(hawk,dark,side*.18,.13,-.71,.035,.036,.034);
+    const wing=new THREE.Group();wing.position.set(side*.17,.07,0);hawk.add(wing);hawkWings.push({wing,side});
+    const shoulder=part(wing,brown,side*.55,0,.02,.72,.09,.34);shoulder.rotation.y=side*-.15;
+    for(let j=0;j<8;j++){
+      const feather=part(wing,j<4?cream:dark,side*(.45+j*.16),-.025,.18+j*.035,.13,.045,.43-j*.013);
+      feather.rotation.y=side*(-.18-j*.075);
+    }
+  }
+  for(let j=-2;j<=2;j++){
+    const tail=part(hawk,rust,j*.105,0,.74,.095,.045,.4);tail.rotation.y=j*.13;
+  }
+  hawk.scale.setScalar(1.0);scene.add(hawk);
 })();
-/* hawk behavior: circles far off; occasionally swoops in close where it
-   can be shot for bonus points */
-let hawkState = 'circle', nextSwoopAt = 14, swoopT0 = 0, swoopDur = 7, hawkRespawnAt = 0;
-const P0 = new THREE.Vector3(), P1 = new THREE.Vector3(), P2 = new THREE.Vector3();
+let hawkState = 'circle', swoopT = 0, swoopDur = 5.8, birdSide = 1, birdPassWidth = 18;
+function startBirdPass(){
+  hawkState='swoop';swoopT=0;birdSide=Math.random()<.5?-1:1;hawk.visible=true;
+  birdPassWidth=Math.min(18,Math.max(6,camera.aspect*16));
+  updateBird(0,clock.elapsedTime);
+}
+function updateBird(dt,T){
+  if(hawkState==='swoop'){
+    swoopT+=dt;
+    const u=Math.min(1,swoopT/swoopDur);
+    // Farther pass: roughly 43–56 metres from the firing line.
+    hawk.position.set(birdSide*birdPassWidth*(1-2*u),10.5-2*Math.sin(Math.PI*u),-38+10*Math.sin(Math.PI*u));
+    const tangent=new THREE.Vector3(-2*birdPassWidth*birdSide,-2*Math.PI*Math.cos(Math.PI*u),10*Math.PI*Math.cos(Math.PI*u)).normalize();
+    hawk.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),tangent);
+    hawk.rotateZ(Math.sin(u*Math.PI*2)*.16);
+    if(u>=1){hawkState='gone';hawk.visible=false;}
+  } else if(hawkState==='circle'){
+    hawk.position.set(Math.cos(T*.11)*55,62+Math.sin(T*.4)*3,-90+Math.sin(T*.11)*40);
+    hawk.rotation.set(0,-T*.11,Math.sin(T*.3)*.15);
+  }
+  for(const {wing,side} of hawkWings) wing.rotation.z=side*(.12+Math.sin(T*8)*.32);
+}
 
 /* ================= TERRAIN ================= */
 /* gently rolling hayfield falling away downrange; flat near the line */
@@ -636,6 +709,22 @@ const fieldTex = canvasTex(1024, (g,s)=>{
   scene.add(stalks); scene.add(heads);
 })();
 
+/* Fine, wind-swept grass along the nearer edges, in a single draw call. */
+(function(){
+  const geo=new THREE.PlaneGeometry(.045,.42,1,3);geo.translate(0,.21,0);
+  const blade=geo.attributes.position;
+  for(let i=0;i<blade.count;i++){const y=blade.getY(i);blade.setX(i,blade.getX(i)*(1-y/.43));}
+  const mat=windSway(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}),.12,false);
+  const grass=new THREE.InstancedMesh(geo,mat,4200),dummy=new THREE.Object3D(),col=new THREE.Color();
+  for(let i=0;i<4200;i++){
+    const x=rand(6,36)*(Math.random()<.5?-1:1),z=rand(-42,22);
+    dummy.position.set(x,fieldY(x,z),z);dummy.rotation.set(rand(-.15,.15),rand(0,Math.PI),rand(-.2,.2));
+    dummy.scale.set(1,rand(.35,1.5),1);dummy.updateMatrix();grass.setMatrixAt(i,dummy.matrix);
+    col.setHSL(rand(...PAL.grassH),rand(...PAL.grassS),rand(...PAL.grassL));grass.setColorAt(i,col);
+  }
+  grass.receiveShadow=true;scene.add(grass);
+})();
+
 /* billboard tree texture factory */
 function treeTexture(kind){
   return canvasTex([256,320], (g,w,h)=>{
@@ -670,6 +759,13 @@ function treeTexture(kind){
       cg.addColorStop(1, 'rgba(0,0,0,0)');
       g.globalAlpha = 0.85;
       g.fillStyle = cg; g.beginPath(); g.arc(cx,cy,r,0,7); g.fill();
+      for(let leaf=0;leaf<50;leaf++){
+        const a=rand(0,Math.PI*2),d=Math.sqrt(Math.random())*r*.94;
+        const lx=cx+Math.cos(a)*d,ly=cy+Math.sin(a)*d;
+        const col=new THREE.Color(tint);col.multiplyScalar(rand(.65,1.18));
+        g.globalAlpha=.85;g.fillStyle='#'+col.getHexString();
+        g.beginPath();g.ellipse(lx,ly,rand(1.4,3.8),rand(1,2.6),a,0,Math.PI*2);g.fill();
+      }
     }
     g.globalAlpha = 1;
   });
@@ -710,50 +806,22 @@ function treeTexture(kind){
 })();
 /* continuous treeline strips downrange (no structures past this!) */
 function treelineTexture(seed, lightness){
-  return canvasTex([2048,256], (g,w,h)=>{
-    g.clearRect(0,0,w,h);
-    // distinct overlapping tree crowns built from many small leaf-cluster blobs
-    let tx = -40;
-    while(tx < w + 40){
-      const crownW = rand(46,90), crownH = rand(h*0.45, h*0.88);
-      const topY = h - crownH;
-      const col = new THREE.Color(pick(PAL.canopy));
-      col.offsetHSL(rand(-0.01,0.01), rand(-0.05,0.05), lightness + rand(-0.05,0.05));
-      const lit = col.clone().offsetHSL(0, 0, 0.07);
-      const shade = col.clone().offsetHSL(0, 0, -0.1);
-      for(let i=0;i<44;i++){
-        const fy = Math.pow(Math.random(), 0.85);       // bias toward the base
-        const y = topY + fy*crownH;
-        const halfw = crownW*0.5*(0.3 + 0.7*Math.sin(Math.min(1,fy+0.15)*Math.PI*0.6));
-        const x = tx + rand(-halfw, halfw);
-        const r = rand(7,16);
-        const c2 = Math.random()<0.3 ? lit : Math.random()<0.5 ? col : shade;
-        const cg = g.createRadialGradient(x-r*0.3, y-r*0.3, r*0.1, x, y, r);
-        cg.addColorStop(0, c2.getStyle());
-        cg.addColorStop(0.7, c2.getStyle());
-        cg.addColorStop(1, 'rgba(0,0,0,0)');
-        g.fillStyle = cg; g.beginPath(); g.arc(x,y,r,0,7); g.fill();
+  return canvasTex([4096,512],(g,w,h)=>{
+    for(let tx=-30;tx<w+40;tx+=rand(24,45)){
+      const top=rand(45,200),rx=rand(32,64),ry=(h-top)*.52;
+      const col=new THREE.Color(pick(PAL.canopy)).offsetHSL(0,-.12,lightness-.05);
+      g.fillStyle=col.clone().multiplyScalar(.68).getStyle();
+      g.beginPath();g.ellipse(tx,top+ry,rx,ry,0,0,Math.PI*2);g.fill();
+      for(let j=0;j<360;j++){
+        const a=rand(0,Math.PI*2),d=Math.sqrt(Math.random());
+        const x=tx+Math.cos(a)*d*rx,y=top+ry+Math.sin(a)*d*ry;
+        g.fillStyle=col.clone().multiplyScalar(rand(.65,1.3)).getStyle();
+        g.beginPath();g.ellipse(x,y,rand(2,6),rand(2,5),a,0,Math.PI*2);g.fill();
       }
-      tx += crownW * rand(0.4,0.65);
     }
-    // leaf speckle, clipped to the canopy silhouette
-    g.globalCompositeOperation = 'source-atop';
-    for(let i=0;i<5000;i++){
-      g.fillStyle = pick(PAL.canopy);
-      g.globalAlpha = 0.1+Math.random()*0.15;
-      g.fillRect(Math.random()*w, Math.random()*h, 2+Math.random()*3, 2+Math.random()*3);
-    }
-    g.globalAlpha = 1;
-    // dark understory shadow at the base
-    const ug = g.createLinearGradient(0,h*0.8,0,h);
-    ug.addColorStop(0,'rgba(28,30,18,0)'); ug.addColorStop(1,'rgba(28,30,18,.7)');
-    g.fillStyle = ug; g.fillRect(0,h*0.8,w,h*0.2);
-    // birch trunks catching light at the wood edge
-    g.fillStyle = 'rgba(235,230,220,.55)';
-    for(let i=0;i<46;i++){
-      const x = Math.random()*w;
-      g.fillRect(x, h*0.74+Math.random()*h*0.08, 2.5, h*0.18);
-    }
+    g.globalCompositeOperation='source-atop';
+    const shade=g.createLinearGradient(0,h*.55,0,h);shade.addColorStop(0,'#142a1900');shade.addColorStop(1,'#142219d9');
+    g.fillStyle=shade;g.fillRect(0,0,w,h);
   });
 }
 (function(){
@@ -775,7 +843,7 @@ function treelineTexture(seed, lightness){
 (function(){
   const grp = new THREE.BufferGeometry();
   const mat = new THREE.MeshLambertMaterial({color:PAL.pine});
-  const cone = new THREE.ConeGeometry(1,1,7);
+  const cone = new THREE.ConeGeometry(1,1,13);
   const mesh = new THREE.InstancedMesh(cone, mat, 26*4);
   const dummy = new THREE.Object3D();
   let idx=0;
@@ -809,7 +877,7 @@ function treelineTexture(seed, lightness){
       g.fillStyle = grd;
       g.beginPath(); g.moveTo(0,h);
       for(let x=0;x<=w;x+=8){
-        const y = h*0.55 - Math.sin(x*0.0021+seedA)*h*0.3 - Math.sin(x*0.0063+seedB)*h*0.12;
+        const y = h*0.55 - Math.sin(x*0.0021+seedA)*h*0.3 - Math.sin(x*0.0063+seedB)*h*0.12 - Math.sin(x*.021+seedA)*h*.014;
         g.lineTo(x,y);
       }
       g.lineTo(w,h); g.closePath(); g.fill();
@@ -1063,8 +1131,8 @@ const flagBase = flagMesh.geometry.attributes.position.array.slice();
 /* ================= SHOTGUN VIEWMODEL (ported) ================= */
 const gun = new THREE.Group();
 (function(){
-  const steel = new THREE.MeshStandardMaterial({color:0x23282e, roughness:0.32, metalness:0.85});
-  const blued = new THREE.MeshStandardMaterial({color:0x1a1e24, roughness:0.4, metalness:0.7});
+  const steel = new THREE.MeshStandardMaterial({color:0x58616a, roughness:0.32, metalness:0.38});
+  const blued = new THREE.MeshStandardMaterial({color:0x343e48, roughness:0.4, metalness:0.32});
   const woodTex = canvasTex(128, (g,s)=>{
     g.fillStyle = '#6e3f1d'; g.fillRect(0,0,s,s);
     for(let i=0;i<40;i++){
@@ -1113,14 +1181,19 @@ const flash = new THREE.Mesh(new THREE.SphereGeometry(0.1,8,6),
 flash.position.set(0.32,-0.30,-2.4); camera.add(flash);
 
 /* ================= CLAYS (ported verbatim) ================= */
-const clayMat = new THREE.MeshStandardMaterial({color:0xe85a1c, emissive:0x521a00, roughness:0.35, metalness:0.05});
-const clayRimMat = new THREE.MeshStandardMaterial({color:0x241d19, roughness:0.6, metalness:0.05});
+const clayMat = new THREE.MeshStandardMaterial({color:0xff5a00, emissive:0xff5000, emissiveIntensity:0.5, roughness:0.7, metalness:0, toneMapped:false});
+const clayRimMat = new THREE.MeshStandardMaterial({color:0xff6500, emissive:0xff5000, emissiveIntensity:0.55, roughness:0.75, metalness:0, toneMapped:false});
+const clayBaseMat = new THREE.MeshBasicMaterial({color:0xff6500, toneMapped:false});
 function makeClayMesh(){
   const grp = new THREE.Group();
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.5,14,8,0,Math.PI*2,0,Math.PI/2.6), clayMat);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.5,32,12,0,Math.PI*2,0,Math.PI/2.6), clayMat);
   dome.scale.y = 0.55; dome.castShadow = true; grp.add(dome);
-  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.52,0.46,0.12,14), clayRimMat);
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.52,0.46,0.12,32), [clayRimMat,clayMat,clayBaseMat]);
   rim.position.y = 0.02; rim.castShadow = true; grp.add(rim);
+  for(const r of [.27,.4,.5]){
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(r,.014,5,32),clayMat);
+    ring.rotation.x=Math.PI/2;ring.position.y=.25-r*.3;grp.add(ring);
+  }
   return grp;
 }
 const trailTexture = (function(){
@@ -1135,11 +1208,15 @@ const trailTexture = (function(){
 
 const G = new THREE.Vector3(0,-5.2,0);
 let clays = [];
+let pendingLaunches = 0, pullToken = 0;
 let frags = [];
 let puffs = [];
 
 function launchClay(vx, vy, vz, delay){
+  const token=pullToken;pendingLaunches++;
   setTimeout(()=>{
+    if(token!==pullToken) return;
+    pendingLaunches--;
     if(state!=='flying') return;
     const mesh = makeClayMesh();
     mesh.rotation.order = 'ZYX'; // bank stays fixed to the flight line; spin doesn't precess (no wobble)
@@ -1200,15 +1277,27 @@ function puff(pos){
 const $ = id => document.getElementById(id);
 let state = 'over'; // idle | waiting | flying | between | over
 let pullNum = 0, hits = 0, thrown = 0, shells = 0, launchTimer = 0;
-let pendingDouble = false, claysThisPull = 0, hitsThisPull = 0, bonus = 0;
+let birdPulls = new Set();
+let pendingDouble = false, claysThisPull = 0, hitsThisPull = 0, bonus = 0, birdHitThisPull = false;
 
 function setScore(){
   $('score').textContent = hits + '/' + Math.max(thrown, TOTAL_PULLS) + (bonus ? ' +' + bonus : '');
 }
 function setShells(){
-  const el = $('shells'); el.innerHTML = '';
-  const s=document.createElement('div'); s.className='shell-icon'; el.appendChild(s);
-  const x=document.createElement('span'); x.textContent='× '+shells; el.appendChild(x);
+  const el=$('shells');el.innerHTML='<span class="ammo-label">SHOTS</span>';
+  el.setAttribute('aria-label',shells+' of '+SHELLS_PER_PULL+' shots remaining');
+  for(let i=0;i<SHELLS_PER_PULL;i++){
+    const shell=document.createElement('div');shell.className='shell-icon'+(i>=shells?' spent':'');el.appendChild(shell);
+  }
+}
+function updateBirdStatus(){
+  const el=$('birdStatus');
+  el.classList.toggle('show',state==='flying' && hawkState==='swoop' && shells>0);
+  el.textContent=clays.length===0 && pendingLaunches===0 ? 'BIRD STILL IN RANGE · TAKE YOUR SHOT' : 'BONUS BIRD IN RANGE · +5';
+}
+function maybeFinishPull(){
+  if(state!=='flying' || pendingLaunches>0) return;
+  if(shells===0 || (clays.length===0 && hawkState!=='swoop')) pullDone();
 }
 function showMsg(text, cls){
   const m = $('msg'); m.textContent = text; m.className = 'msg show '+cls;
@@ -1218,18 +1307,22 @@ function nextPull(){
   pullNum++;
   if(pullNum > TOTAL_PULLS){ endRound(); return; }
   state = 'idle';
+  pullToken++;pendingLaunches=0;birdHitThisPull=false;
   shells = SHELLS_PER_PULL; setShells();
-  pendingDouble = pullNum > 1 && Math.random() < DOUBLES_CHANCE;
+  pendingDouble = true; // Two clays on every pull, including the first.
   $('stationLabel').textContent = 'PULL ' + pullNum + ' / ' + TOTAL_PULLS;
   if(isTouchDevice) $('pullBtn').classList.remove('hidden');
   $('doublesTag').classList.remove('show');
 }
 function pullDone(){
+  if(state!=='flying') return;
   state = 'between';
+  clays.forEach(c=>scene.remove(c.mesh));clays=[];
+  hawkState='gone';hawk.visible=false;updateBirdStatus();
   $('doublesTag').classList.remove('show');
-  if(hitsThisPull === claysThisPull) showMsg(claysThisPull>1 ? 'PAIR!' : 'HIT!', 'hit');
+  if(hitsThisPull === claysThisPull) showMsg(birdHitThisPull ? (claysThisPull>1 ? 'TRIPLE! +5' : 'CLAY + BIRD! +5') : (claysThisPull>1 ? 'PAIR!' : 'HIT!'), 'hit');
   else if(hitsThisPull > 0) showMsg(hitsThisPull+' OF '+claysThisPull, 'partial');
-  else showMsg('MISS', 'miss');
+  else showMsg(birdHitThisPull ? 'BIRD! +5' : 'MISS', birdHitThisPull ? 'partial' : 'miss');
   setTimeout(()=>{ playPump(); nextPull(); }, 950);
 }
 function endRound(){
@@ -1243,6 +1336,8 @@ function endRound(){
 }
 function startRound(){
   hits = 0; thrown = 0; pullNum = 0; bonus = 0; setScore();
+  birdPulls=new Set([randi(1,4),randi(5,7),randi(8,11)]);
+  hawkState='gone';hawk.visible=false;yaw=viewYaw=0;pitch=viewPitch=.10;
   $('startOverlay').classList.add('hidden');
   $('endOverlay').classList.add('hidden');
   clays.forEach(c=>scene.remove(c.mesh)); clays = [];
@@ -1267,11 +1362,15 @@ addEventListener('keydown', e=>{
    Free aim: the mouse/trackpad ALWAYS moves the sight (pointer lock,
    cursor hidden). Press = PULL, release = FIRE — independent of aiming.
    Touch devices keep the prototype drag-to-track behavior. */
-const SENS = 0.0032;        // tuned drag sensitivity (touch path — locked from prototype)
-const MOUSE_SENS = 0.0016;  // pointer-lock free aim runs hotter, so half rate
-const MOVE_CAP = 60;        // ignore trackpad/pointer-lock spikes beyond this px/event
+const SENS = 0.0022;        // steadier touch tracking
+const MOUSE_SENS = 0.00105; // lower mouse / trackpad sensitivity
+const MOVE_CAP = 40;        // ignore trackpad/pointer-lock spikes beyond this px/event
 const isTouchDevice = matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches;
 let locked = false;
+if(isTouchDevice){
+  document.querySelector('.howto div').innerHTML='<b>AIM</b>Drag your finger to track the clays and bird';
+  document.querySelector('.esc-note').textContent='Touch and hold to pull. Drag to aim. Lift to shoot.';
+}
 
 function lockPointer(){
   if(isTouchDevice) return;
@@ -1294,6 +1393,14 @@ function applyAim(dx, dy, sens){
   pitch = Math.max(-0.15, Math.min(0.85, pitch));
 }
 
+function updateAim(dt){
+  // Frame-rate independent damping removes pointer jitter without a long aiming lag.
+  const blend=1-Math.exp(-28*dt);
+  viewYaw+=(yaw-viewYaw)*blend;
+  viewPitch+=(pitch-viewPitch)*blend;
+  camera.rotation.set(viewPitch+recoil*.018,viewYaw,0,'YXZ');
+}
+
 /* mouse / trackpad path (pointer lock) */
 addEventListener('mousemove', e=>{
   if(!locked) return;
@@ -1310,7 +1417,7 @@ addEventListener('mousedown', e=>{
 addEventListener('mouseup', e=>{
   if(isTouchDevice) return;
   if(!locked) return;
-  if(state==='flying' && shells>0 && clays.length>0) fire();
+  fire();
 });
 
 /* touch path (prototype behavior: press = pull, drag = track, release = fire) */
@@ -1329,14 +1436,16 @@ addEventListener('pointermove', e=>{
 function touchUp(e){
   if(e.pointerType==='mouse' || !dragging) return;
   dragging = false;
-  if(state==='flying' && shells>0 && clays.length>0) fire();
+  fire();
 }
 addEventListener('pointerup', touchUp);
-addEventListener('pointercancel', touchUp);
+addEventListener('pointercancel', ()=>{dragging=false;});
+addEventListener('keyup', e=>{if(e.code==='Space'){e.preventDefault();fire();}});
 
 /* ================= FIRING (ported verbatim) ================= */
 let recoil = 0, flashT = 0;
 function fire(){
+  if(state!=='flying' || shells<=0) return;
   shells--; setShells();
   playGunshot();
   recoil = 1; flashT = 1;
@@ -1358,21 +1467,20 @@ function fire(){
     clays.splice(clays.indexOf(best),1);
   }
   /* bonus bird: only hittable while swooping in close */
-  if(hawkState==='swoop'){
+  if(!best && hawkState==='swoop'){
     const toHawk = hawk.position.clone().sub(camera.position);
     const dist = toHawk.length();
     const ang = fwd.angleTo(toHawk.normalize());
-    if(ang < 0.05 + 0.9/dist){
-      bonus += 5; setScore();
+    if(ang < 0.009 + 0.35/dist){
+      bonus += 5; birdHitThisPull=true;setScore();
       featherBurst(hawk.position);
       playSquawk();
       hawk.visible = false;
       hawkState = 'gone';
-      hawkRespawnAt = clock.elapsedTime + 12;
       showMsg('BONUS BIRD! +5', 'partial');
     }
   }
-  if(best && clays.length===0) pullDone();
+  maybeFinishPull();
 }
 
 /* ================= MAIN LOOP ================= */
@@ -1387,6 +1495,8 @@ function tick(){
     launchTimer -= dt;
     if(launchTimer<=0){
       state = 'flying';
+      if(birdPulls.has(pullNum)) startBirdPass();
+      else {hawkState='gone';hawk.visible=false;}
       hitsThisPull = 0;
       claysThisPull = pendingDouble ? 2 : 1;
       thrown += claysThisPull; setScore();
@@ -1412,7 +1522,6 @@ function tick(){
     if(c.trailT<=0){ puff(c.mesh.position); c.trailT = 0.045; }
     if(c.mesh.position.y < fieldY(c.mesh.position.x, c.mesh.position.z)-0.3 || c.mesh.position.z < -110){
       scene.remove(c.mesh); clays.splice(i,1);
-      if(state==='flying' && clays.length===0) pullDone();
     }
   }
   for(let i=frags.length-1;i>=0;i--){
@@ -1436,31 +1545,9 @@ function tick(){
     c.position.x += c.userData.drift*dt;
     if(c.position.x > 560) c.position.x = -560;
   }
-  /* hawk: distant circling, occasional close swoop (shootable for bonus) */
-  if(hawkState==='circle'){
-    hawk.position.set(Math.cos(T*0.11)*55, 62 + Math.sin(T*0.4)*3, -90 + Math.sin(T*0.11)*40);
-    if(T >= nextSwoopAt && state !== 'over'){
-      hawkState = 'swoop'; swoopT0 = T; swoopDur = rand(6,8);
-      const side = Math.random()<0.5 ? -1 : 1;
-      P0.copy(hawk.position);                                   // leave the circle smoothly
-      P1.set(rand(-15,15), rand(12,22), rand(-50,-25));         // dip low through the field
-      const tEnd = swoopT0 + swoopDur;                          // rejoin the circle path
-      P2.set(Math.cos(tEnd*0.11)*55, 62 + Math.sin(tEnd*0.4)*3, -90 + Math.sin(tEnd*0.11)*40);
-    }
-  } else if(hawkState==='swoop'){
-    const u = (T - swoopT0)/swoopDur;
-    if(u >= 1){ hawkState = 'circle'; nextSwoopAt = T + rand(20,40); }
-    else {
-      const a=(1-u)*(1-u), b=2*u*(1-u), c=u*u;
-      hawk.position.set(
-        a*P0.x + b*P1.x + c*P2.x,
-        a*P0.y + b*P1.y + c*P2.y,
-        a*P0.z + b*P1.z + c*P2.z);
-    }
-  } else if(T >= hawkRespawnAt){ // gone → a new bird drifts in
-    hawkState = 'circle'; hawk.visible = true; nextSwoopAt = T + rand(12,25);
-  }
-  hawk.scale.set(3.2, 1.6*(0.85 + 0.15*Math.sin(T*14)), 1);     // wingbeat
+  updateBird(dt,T);
+  maybeFinishPull();
+  updateBirdStatus();
   /* flag wave */
   {
     const pos = flagMesh.geometry.attributes.position;
@@ -1473,13 +1560,13 @@ function tick(){
     flagMesh.geometry.computeVertexNormals();
   }
 
-  const kick = recoil*0.06;
-  camera.rotation.set(pitch + kick, yaw, 0, 'YXZ');
+  updateAim(dt);
   recoil = Math.max(0, recoil - dt*6);
   flash.material.opacity = Math.max(0, flashT);
   flash.scale.setScalar(0.6 + (1-flashT)*2.4);
   flashT = Math.max(0, flashT - dt*9);
-  gun.position.z = -0.6 + recoil*0.09;
+  gun.position.z = -0.6 + recoil*0.06;
+  gun.rotation.x = recoil*.035;
 
   renderer.render(scene, camera);
 }
